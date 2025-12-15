@@ -17,18 +17,18 @@ import addressRouter from './router/address.js'
 import reviewRouter from './router/reviewRouter.js'
 import blogRouter from './router/blogRoute.js'
 import bannerRouter from './router/bannerRoute.js'
+import { errorHandler } from './middleware/errorHandler.js'
+
 const app = express()
 app.use(cookieParser())
 app.use(express.json())
-// Serve uploaded files (product/category images) statically at /uploads
+app.use(bodyParser.json())
 import path from 'path'
 const __dirname = path.resolve();
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// Allow all CORS origins for development
 app.use(cors());
 app.use('/api/user',router)
 app.use('/api/routerCategory',routerCat)
-// added alias for frontend consistency: use '/api/category' as well
 app.use('/api/category', routerCat)
 app.use('/api/cart',cartRouter)
 app.use('/api/product',productRouter)
@@ -38,10 +38,11 @@ app.use('/api/address',addressRouter)
 app.use('/api/review',reviewRouter)
 app.use('/api/blog', blogRouter)
 app.use('/api/banners', bannerRouter)
-app.use(bodyParser.json());
+
+app.use(errorHandler);
 
 connectDB().then(()=>{  
-    app.listen(process.env.PORT,()=>{
+    app.listen(process.env.PORT,"0.0.0.0",()=>{
         console.log("The server is running "+process.env.PORT)
     })
 }).catch((error)=>{

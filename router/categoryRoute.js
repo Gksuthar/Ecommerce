@@ -30,8 +30,8 @@ routerCat.post('/imageUpload',upload.array('image'),auth,imageUploader)
 // Category CRUD
 routerCat.post('/createCategoryController',createCategoryController)
 routerCat.get('/',getCategoryController)
-routerCat.get('/level/:level', getCategoriesByLevel) // Get by level (1, 2, 3)
-routerCat.get('/subcategories/:parentId', getSubcategories) // Get children of a category
+routerCat.get('/level/:level', getCategoriesByLevel) 
+routerCat.get('/subcategories/:parentId', getSubcategories) 
 routerCat.get('/:id', getCategoryById)
 routerCat.put('/:id', updateCategoryController)
 routerCat.delete('/:id', deleteCategoryController)

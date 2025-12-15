@@ -10,10 +10,10 @@ cloudinary.config({
 
 
 var images = [];
+
 const imageUploader = async (req, res) => {
   try {
     const userId = req.userId;
-    // images = [];
     const image = req.files;
 
 
@@ -35,7 +35,6 @@ const imageUploader = async (req, res) => {
         images.push(img.secure_url)
         fs.unlinkSync(image[i].path)
     }
-      // return full array of uploaded image URLs
       return res.status(200).json({ images });
 
     
@@ -46,28 +45,25 @@ const imageUploader = async (req, res) => {
 
   }
 };
+
+
 const createCategoryController = async (req, res) => {
   try {
     const {name,parentCatName,parentId, status} = req.body;
-    // Allow clients to provide an images array in the request body (preferred),
-    // otherwise fall back to any images previously uploaded via the imageUploader
+ 
     let providedImages = [];
     try {
       if (req.body.images) {
-        // body may contain a JSON string or an actual array
         providedImages = Array.isArray(req.body.images)
           ? req.body.images
           : JSON.parse(req.body.images);
       }
     } catch (e) {
-      // if parsing fails, ignore and use empty array
       providedImages = [];
     }
 
     const imagesToUse = providedImages.length > 0 ? providedImages : images;
-
-    // Auto-calculate level based on parent
-    let level = 1; // Default main category
+    let level = 1;
     if (parentId) {
       const parentCategory = await categoyModal.findById(parentId);
       if (parentCategory) {
@@ -75,7 +71,6 @@ const createCategoryController = async (req, res) => {
       }
     }
 
-    // Generate slug
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
     let category = new categoyModal({
@@ -96,7 +91,6 @@ const createCategoryController = async (req, res) => {
     }
     await category.save()
 
-  // clear module-level images buffer after creating category
   images = [];
     return res
       .status(200)
@@ -114,7 +108,6 @@ const getCategoryController = async (req, res) => {
 
     let categoryData = await categoyModal.find();
 
-    // If there are no categories in DB, create a default one and use it
     if (!categoryData || categoryData.length === 0) {
       const defaultCategory = new categoyModal({
         name: "Electronics",
@@ -123,23 +116,19 @@ const getCategoryController = async (req, res) => {
         images: [],
       });
       await defaultCategory.save();
-      // reload categoryData to include the newly created default category
       categoryData = [defaultCategory];
     }
 
     const categoryMap = {};
-
     categoryData.forEach((cat) => (categoryMap[cat._id] = { ...cat._doc, children: [] }));
 
     const rootCategories = [];
 
     categoryData.forEach((cat) => {
       if (cat.parentId) {
-        // ensure parent exists in the map before pushing
         if (categoryMap[cat.parentId]) {
           categoryMap[cat.parentId].children.push(categoryMap[cat._id]);
         } else {
-          // Fallback: if parent not found, treat as root
           rootCategories.push(categoryMap[cat._id]);
         }
       } else {
@@ -178,9 +167,10 @@ const updateCategoryController = async (req, res) => {
   try {
     const { id } = req.params;
     const update = req.body;
-    // If images provided as JSON string, parse it
+
+    
     if (update.images && typeof update.images === 'string') {
-      try { update.images = JSON.parse(update.images); } catch (e) { /* ignore */ }
+      try { update.images = JSON.parse(update.images); } catch (e){};
     }
     const category = await categoyModal.findById(id);
     if (!category) {
@@ -195,9 +185,9 @@ const updateCategoryController = async (req, res) => {
 };
 
 
-// Get categories by level (1 = main, 2 = sub, 3 = third)
 const getCategoriesByLevel = async (req, res) => {
   try {
+    console.log("Fetching categories by level-------------->"+req.params.level);
     const { level } = req.params;
     const categories = await categoyModal.find({ level: parseInt(level) }).lean();
     return res.status(200).json({ 

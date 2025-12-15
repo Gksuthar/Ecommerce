@@ -1,216 +1,105 @@
 import mongoose from "mongoose";
 import UserModel from "../models/user.js";
-import bcryptjs from "bcryptjs";
-import sendEmail from "../config/emailservice.js";
-import jwt from "jsonwebtoken";
-import generatedRefreshToken from "../utils/generateRefreshToken.js";
-import generatedAccessToken from "../utils/generateAccessToken.js";
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendSuccess, sendCreated, sendError, sendUnauthorized } from "../utils/responseHandler.js";
+import { validateRequiredFields, validateEmail } from "../utils/validation.js";
+import * as userService from "../services/user.service.js";
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
   api_key: process.env.CLOUDINARY_KEY,
   api_secret: process.env.CLOUDINARY_SECRET,
 });
 
-const registerUserController = async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "All field are required",
-        error: true,
-        success: false,
-      });
-    }
-    const user = await UserModel.findOne({ email: email });
-    if (user) {
-      return res.status(400).json({
-        message: "You are Already Part Of Our Service",
-        error: true,
-        success: false,
-      });
-    }
-    const varifyCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const salt = await bcryptjs.genSalt(10);
-    const hashedPassword = await bcryptjs.hash(password, salt);
-    const otpExpiry = Date.now() + 600000;
-    const newUser = new UserModel({
-      name: name,
-      email: email,
-      password: hashedPassword,
-      otp: varifyCode,
-      otp_expiry: otpExpiry,
-    });
-    const verifyEmail = await sendEmail({
-      sendTo: email,
-      subject: "Verify Email from Ganesh Site " + varifyCode,
-      text: "ganeshutahr",
-      html:
-        "<h1>Verify your email</h1><p>Use this code: <b>" +
-        varifyCode +
-        "</b></p>",
-    });
+// Register User
+const registerUserController = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
 
-    const token = jwt.sign(
-      {
-        email: newUser.email,
-        id: newUser._id,
-      },
-      process.env.JWT_SECRET
-    );
-
-    await newUser.save();
-
-    return res.status(201).json({
-      message: "User registered successfully",
-      success: true,
-      error: false,
-      user: newUser,
-      token: token,
-    });
-
-    // const resp = sendEmailFun(email,"Verify Email","","Your Otp is "+varifyCode)
-  } catch (error) {
-    return res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  // Validate required fields
+  const missingFields = validateRequiredFields(['name', 'email', 'password'], req.body);
+  if (missingFields) {
+    return sendError(res, `Missing required fields: ${missingFields.join(', ')}`);
   }
-};
 
-const emailVarification = async (req, res) => {
-  try {
-    const { otp, email } = req.body;
-    const user = await UserModel.findOne({ email: email });
-    const otpTimeout = Date.now();
-    if (!user) {
-      return res
-        .status(400)
-        .send({ error: true, success: false, message: "User is not exist " });
-    }
-
-    if (user.otp !== otp) {
-      return res
-        .status(500)
-        .send({ error: true, success: false, message: "Your Otp Invalid " });
-    }
-
-    if (otpTimeout > user.otp_expiry) {
-      return res
-        .status(500)
-        .send({ error: true, success: false, message: "Your Otp Expired " });
-    }
-
-    await user.save();
-    return res.status(200).send({
-      error: false,
-      success: true,
-      message: "Email Verifiend Successfully",
-    });
-  } catch (error) {
-    return res
-      .status(500)
-      .send({ error: true, success: false, message: error.message || error });
+  // Validate email format
+  if (!validateEmail(email)) {
+    return sendError(res, "Invalid email format");
   }
-};
 
-const loginUserController = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({
-        error: true,
-        success: false,
-        message: "all fields  are required",
-      });
-    }
-
-    const user = await UserModel.findOne({ email: email });
-    if (!user) {
-      return res.status(400).json({
-        error: true,
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    if (user.status !== "Active") {
-      return res.status(400).json({
-        error: true,
-        success: false,
-        message: "Oops.. You are not active",
-      });
-    }
-    const match = await bcryptjs.compare(password, user.password);
-    if (!match) {
-      return res.status(400).json({
-        error: true,
-        success: false,
-        message: " Your are password is incorrect",
-      });
-    }
-
-    const accessToken = await generatedAccessToken(user._id);
-    const refreshToken = await generatedRefreshToken(user._id);
-
-    await UserModel.findByIdAndUpdate(user?._id, {
-      last_login_date: Date.now(),
-    });
-
-    const cookieOption = {
-      httpOnly: true,
-      secure: false,
-      sameSite: "None",
-    };
-    res.cookie("accessToken", accessToken, cookieOption);
-    res.cookie("refreshToken", refreshToken, cookieOption);
-
-    return res.status(200).json({
-      error: false,
-      success: true,
-      message: " Login Successfully",
-      data: {
-        accessToken,
-        refreshToken,
-      },
-    });
-  } catch (error) {
-    return res.status(400).json({
-      error: true,
-      success: false,
-      message: error.message || error,
-    });
+  // Check if user already exists
+  const existingUser = await userService.findUserByEmail(email);
+  if (existingUser) {
+    return sendError(res, "Email already registered");
   }
-};
 
-const logoutController = async (req, res) => {
-  try {
-    const userid = req.userId;
-    const cookieOption = {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-    };
+  // Create new user
+  const newUser = await userService.createUser({ name, email, password });
 
-    res.clearCookie("accessToken", cookieOption);
-    await UserModel.findByIdAndUpdate(userid, {
-      refresh_token: "",
-    });
-    return res.json({
-      message: "Logout Successfully",
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  // Send verification email
+  await userService.sendVerificationEmail(email, newUser.otp);
+
+  // Generate JWT token
+  const token = userService.generateJWT(newUser);
+
+  return sendCreated(res, { user: newUser, token }, "User registered successfully. Check email for OTP.");
+});
+
+// Email Verification
+const emailVarification = asyncHandler(async (req, res) => {
+  const { otp, email } = req.body;
+
+  const missingFields = validateRequiredFields(['otp', 'email'], req.body);
+  if (missingFields) {
+    return sendError(res, `Missing required fields: ${missingFields.join(', ')}`);
   }
-};
+
+  await userService.verifyOTP(email, otp);
+
+  return sendSuccess(res, null, "Email verified successfully");
+});
+
+// Login User
+const loginUserController = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validate required fields
+  const missingFields = validateRequiredFields(['email', 'password'], req.body);
+  if (missingFields) {
+    return sendError(res, `Missing required fields: ${missingFields.join(', ')}`);
+  }
+
+  // Login user
+  const { user, accessToken, refreshToken } = await userService.loginUser(email, password);
+
+  // Set cookies
+  const cookieOption = {
+    httpOnly: true,
+    secure: false,
+    sameSite: "None",
+  };
+  res.cookie("accessToken", accessToken, cookieOption);
+  res.cookie("refreshToken", refreshToken, cookieOption);
+
+  return sendSuccess(res, { accessToken, refreshToken }, "Login successful");
+});
+
+// Logout User
+const logoutController = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  await userService.logoutUser(userId);
+
+  const cookieOption = {
+    httpOnly: true,
+    secure: true,
+    sameSite: "None",
+  };
+  res.clearCookie("accessToken", cookieOption);
+
+  return sendSuccess(res, null, "Logout successful");
+});
 
 const imageUploader = async (req, res) => {
   try {

@@ -261,6 +261,7 @@ const getAllProducts = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllProductsBycatId = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -303,6 +304,7 @@ const getAllProductsBycatId = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllProductsBycatName = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -343,6 +345,7 @@ const getAllProductsBycatName = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllProductsFilterByPrice = async (req, res) => {
   try {
     let productList = [];
@@ -394,6 +397,7 @@ const getAllProductsFilterByPrice = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllProductsByRating = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1; 
@@ -432,6 +436,7 @@ const getAllProductsByRating = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllProductsCount = async (req, res) => {
   try {
     
@@ -452,6 +457,7 @@ const getAllProductsCount = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getAllFeatureProducts = async (req, res) => {
   try {
     
@@ -474,6 +480,7 @@ const getAllFeatureProducts = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const deleteProduct = async (req, res) => {
   try {
     
@@ -517,6 +524,7 @@ const deleteProduct = async (req, res) => {
       .json({ message: error.message || error, success: false, error: true });
   }
 };
+
 const getProduct = async (req, res) => {
   try {
     

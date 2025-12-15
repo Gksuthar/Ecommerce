@@ -1,186 +1,84 @@
 import CartProduct from "../models/cartproduct.js";
 import UserModal from "../models/user.js";
-const addToCartController = async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { productId, quantity } = req.body;
-    if (!productId) {
-      return res.status(400).json({
-        message: "provide product id",
-        error: true,
-        success: false,
-      });
-    }
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendSuccess, sendCreated, sendError, sendNotFound } from "../utils/responseHandler.js";
+import { validateObjectId } from "../utils/validation.js";
 
-    const checkItemCart = await CartProduct.findOne({
-      userId: userId,
-      productId: productId,
-    });
-    if (checkItemCart) {
-      return res.status(400).json({
-        message: "item already in Cart",
-        error: true,
-        success: false,
-      });
-    }
+// Add to Cart
+const addToCartController = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  const { productId, quantity = 1 } = req.body;
 
-    const cart = new CartProduct({
-      productId: productId,
-      quantity: quantity,
-      userId: userId,
-    });
-
-    const save = await cart.save();
-
-    const updateCartUser = await UserModal.updateOne(
-      { _id: userId },
-      {
-        $push: {
-          shopping_cart: productId,
-        },
-      }
-    );
-    res.status(200).json({
-      data: save,
-      message: "item added successfully",
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  if (!productId) {
+    return sendError(res, "Product ID is required");
   }
-};
 
-const getCartItemController = async (req, res) => {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found. Please log in first.",
-        error: true,
-        success: false,
-      });
-    }
-    const cartItem = await CartProduct.find({
-      userId: userId,
-    }).populate("productId");
-
-    if (cartItem.length === 0) {
-      // Return 200 with empty array for empty cart to avoid noisy 404s on client
-      return res.status(200).json({
-        data: [],
-        message: "Cart is empty",
-        error: false,
-        success: true,
-      });
-    }
-    return res.status(200).json({
-      data: cartItem,
-      message: "Cart fetched successfully",
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  const existingItem = await CartProduct.findOne({ userId, productId });
+  if (existingItem) {
+    return sendError(res, "Item already in cart");
   }
-};
-const updateCartItemController = async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { productId, qty } = req.body;
 
-    console.log(`Received update request: productId=${productId}, qty=${qty}`);
+  const cart = await CartProduct.create({ productId, quantity, userId });
 
-    if (!productId || qty === undefined) {
-      return res.status(400).json({
-        message: "Product ID and valid quantity are required.",
-        error: true,
-        success: false,
-      });
-    }
+  await UserModal.updateOne({ _id: userId }, { $push: { shopping_cart: productId } });
 
-    if (qty === 0) {
-      console.log(`Deleting product ${productId} for user ${userId}`);
-      const deletedCartItem = await CartProduct.findOneAndDelete({
-        productId: productId,
-        userId: userId,
-      });
+  return sendCreated(res, cart, "Item added to cart successfully");
+});
 
-      return res.status(200).json({
-        message: "Cart item removed successfully",
-        error: false,
-        success: true,
-      });
-    }
+// Get Cart Items
+const getCartItemController = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  
+  const cartItems = await CartProduct.find({ userId }).populate("productId");
 
-    console.log(`Updating product ${productId} to qty=${qty}`);
-    const updatedCartItem = await CartProduct.findOneAndUpdate(
-      { productId: productId, userId: userId },
-      { $set: { quantity: qty } },
-      { new: true }
-    );
+  return sendSuccess(
+    res,
+    cartItems,
+    cartItems.length === 0 ? "Cart is empty" : "Cart fetched successfully"
+  );
+});
 
-    return res.status(200).json({
-      data: updatedCartItem,
-      message: "Cart updated successfully",
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: error.message || "Something went wrong.",
-      error: true,
-      success: false,
-    });
+// Update Cart Item Quantity
+const updateCartItemController = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  const { productId, qty } = req.body;
+
+  if (!productId || qty === undefined) {
+    return sendError(res, "Product ID and quantity are required");
   }
-};
 
-
-
-const deletCartItemQty = async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { _id } = req.body;
-    if (!_id) {
-      return res.status(404).json({
-        message: "id is missing",
-        error: true,
-        success: false,
-      });
-    }
-    const deleteItem = await CartProduct.findByIdAndDelete(_id);
-    if (!deleteItem) {
-      return res.status(404).json({
-        message: "deleteItem is missing",
-        error: true,
-        success: false,
-      });
-    }
-    await UserModal.findByIdAndUpdate(userId, {
-      shopping_cart: [],
-    });
-
-    res.status(200).json({
-      message: "cart item deleted",
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  if (qty === 0) {
+    await CartProduct.findOneAndDelete({ productId, userId });
+    return sendSuccess(res, null, "Cart item removed successfully");
   }
-};
+
+  const updatedItem = await CartProduct.findOneAndUpdate(
+    { productId, userId },
+    { $set: { quantity: qty } },
+    { new: true }
+  );
+
+  return sendSuccess(res, updatedItem, "Cart updated successfully");
+});
+
+// Delete Cart Item
+const deletCartItemQty = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  const { _id } = req.body;
+
+  if (!_id || !validateObjectId(_id)) {
+    return sendError(res, "Valid item ID is required");
+  }
+
+  const deletedItem = await CartProduct.findByIdAndDelete(_id);
+  if (!deletedItem) {
+    return sendNotFound(res, "Item not found in cart");
+  }
+
+  await UserModal.findByIdAndUpdate(userId, { shopping_cart: [] });
+
+  return sendSuccess(res, null, "Cart item deleted successfully");
+});
 
 export {
   addToCartController,

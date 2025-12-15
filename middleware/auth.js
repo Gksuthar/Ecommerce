@@ -2,7 +2,6 @@ import jwt from 'jsonwebtoken';
 
 const auth = async (req, res, next) => {
   try {
-    // Read token from cookie or Authorization header. Don't use browser localStorage on server.
     let token = req.cookies?.accessToken || req?.headers?.authorization?.split(" ")[1];
     console.log("Received Token:", token);
 
@@ -19,7 +18,6 @@ const auth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    
     
     console.error("Authentication Error:", error.message);
 
@@ -39,7 +37,6 @@ const auth = async (req, res, next) => {
       });
     }
     
-    // Handle other errors
     return res.status(500).json({
       message: "Internal server error. Authentication failed.",
       error: true,
