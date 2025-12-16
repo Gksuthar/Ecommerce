@@ -27,6 +27,10 @@ import path from 'path'
 const __dirname = path.resolve();
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors());
+app.get("/", (req, res) => {
+  res.status(200).send("🚀 Backend is running successfully");
+});
+
 app.use('/api/user',router)
 app.use('/api/routerCategory',routerCat)
 app.use('/api/category', routerCat)
